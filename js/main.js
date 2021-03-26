@@ -10,10 +10,17 @@ const mySwiper = new Swiper('.swiper-container', {
 
 const buttonCart = document.querySelector('.button-cart');
 const modalCart = document.querySelector('#modal-cart');
-const openModal = function () {
+const more = document.querySelector('.more');
+const navigationLink = document.querySelectorAll('.navigation-link');
+const longGoodsList = document.querySelector('.long-goods-list');
+const scrollLinks = document.querySelectorAll('a.scroll-link');
+const cartTableGoods = document.querySelector('.cart-table__goods');
+const cartTableTotal = document.querySelector('.card-table__total');
+const openModal =  () => {
 	modalCart.classList.add('show')
+	cart.renderCart();
 };
-const closeModal = function () {
+const closeModal =  () => {
 	modalCart.classList.remove('show')
 };
 buttonCart.addEventListener('click', openModal);
@@ -27,12 +34,9 @@ modalCart.addEventListener('click',event  => {
 })
 //scroll smooth
 
-const scrollLinks = document.querySelectorAll('a.scroll-link');
-
 for (const scrollLink of scrollLinks){
 
-	scrollLink.addEventListener('click', function(event) {
-
+	scrollLink.addEventListener('click', event => {
 		event.preventDefault();
 		const id = scrollLink.getAttribute('href');
 		document.querySelector(id).scrollIntoView({
@@ -43,18 +47,110 @@ for (const scrollLink of scrollLinks){
 }
 //goods
 
-const more = document.querySelector('.more');
-const navigationLink = document.querySelectorAll('.navigation-link');
-const longGoodsList = document.querySelector('.long-goods-list');
-
-const getGoods = async function (){
+const getGoods = async  () => {
 	const result = await fetch('db/db.json');
 	if (!result.ok) {
 		throw 'Errorochka' + result.status;
 	}
 	return await  result.json();
 }
-const createCard = function (objCard) {
+const cart = {
+	cartGoods: [
+
+	],
+	renderCart(){
+		cartTableGoods.textContent = '';
+		this.cartGoods.forEach(({id, name, price, count}) => {
+			const trGood = document.createElement('tr');
+			trGood.className = 'cart-item';
+			trGood.dataset.id = id;
+			trGood.innerHTML = `
+				<td>${name}</td>
+\t\t\t\t\t 		<td>${price}$</td>
+\t\t\t\t\t 		<td><button class="cart-btn-minus">-</button></td>
+\t\t\t\t\t 		<td>${count}</td>
+\t\t\t\t\t 		<td><button class="cart-btn-plus">+</button></td>
+\t\t\t\t\t 		<td>${price*count}$</td>
+\t\t\t\t\t 		<td><button class="cart-btn-delete">x</button></td>
+			`;
+			cartTableGoods.append(trGood);
+		});
+		const totalPrice = this.cartGoods.reduce((sum, item) => {
+				return sum + item.price * item.count;
+		},0);
+
+		cartTableTotal.textContent = totalPrice + '$';
+	},
+	deleteGood(id) {
+		this.cartGoods = this.cartGoods.filter(item => id !== item.id)
+		this.renderCart();
+	},
+	minusGood(id) {
+		for (const item of this.cartGoods) {
+			if (item.id === id){
+				if (item.count <= 1){
+					this.deleteGood(id)
+				}else{
+					item.count--;
+				}
+				break;
+			}
+		}
+		this.renderCart();
+	},
+	plusGood(id){
+		for (const item of this.cartGoods) {
+			if (item.id === id){
+				item.count++;
+				break;
+			}
+		}
+		this.renderCart();
+	},
+	addCartGoods(id){
+		const goodItem = this.cartGoods.find(item => item.id === id)
+		if (goodItem){
+			this.plusGood(id)
+		}else{
+			getGoods()
+				.then(data => data.find(item => item.id === id))
+				.then(({id, name, price }) => {
+					this.cartGoods.push({
+						id,
+						name,
+						price,
+						count: 1
+					});
+				});
+		}
+	},
+}
+cart.addCartGoods('001')
+cart.addCartGoods('021')
+document.body.addEventListener('click', e => {
+	const target = e.target.closest('.add-to-cart');
+	if (target){
+		cart.addCartGoods(target.dataset.id)
+	}
+})
+
+cartTableGoods.addEventListener('click', e => {
+	const target = e.target;
+	if (target.tagName === "BUTTON") {
+		const id = target.closest('.cart-item').dataset.id;
+		if (target.classList.contains('cart-btn-delete')) {
+			cart.deleteGood(id);
+		};
+		if (target.classList.contains('cart-btn-minus')) {
+			cart.minusGood(id);
+		}
+		if (target.classList.contains('cart-btn-plus')) {
+			cart.plusGood(id);
+		}
+	}
+
+});
+const createCard =  objCard => {
 	const card = document.createElement('div');
 	card.className = 'col-lg-3 col-sm-6';
 
@@ -72,33 +168,33 @@ const createCard = function (objCard) {
 	`;
 	return card
 };
-const renderCards = function (data) {
+const renderCards = data => {
 	longGoodsList.textContent = '';
 	const cards = data.map(createCard)
 	longGoodsList.append(...cards)
 	document.body.classList.add('show-goods')
 };
 
-more.addEventListener('click', function (event){
+more.addEventListener('click',  event => {
 	event.preventDefault()
 	getGoods().then(renderCards)
 });
 
-const filterCards = function(field,value) {
+const filterCards = (field,value) => {
 	getGoods()
-		.then(function (data){
-		const filteredGoods = data.filter((function (good){
-			return good[field] === value
-		}))
-		return filteredGoods;
-	})
+		.then(data => data.filter( good => good[field] === value))
 		.then(renderCards);
 }
-navigationLink.forEach(function(link) {
-	link.addEventListener('click', function (event){
+navigationLink.forEach(link => {
+	link.addEventListener('click', event => {
 		event.preventDefault();
 		const field = link.dataset.field;
 		const value = link.textContent;
-		filterCards(field,value);
+		if (value === 'All'){
+			getGoods().then(renderCards)
+		}else{
+			filterCards(field,value);
+		}
+
 	})
 });
